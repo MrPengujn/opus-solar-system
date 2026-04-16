@@ -1,0 +1,207 @@
+<canvas #canvas></canvas>
+
+<div class="ui-overlay">
+  <!-- Search -->
+  <div class="search-container">
+    <div class="search-wrapper">
+      <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/>
+        <path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input
+        type="text"
+        class="search-input"
+        [placeholder]="insideGalaxy() ? t('search.inside') + ' ' + (selectedGalaxy()?.name ?? '') + '...' : galaxyView() ? t('search.galaxy') : t('search.planets')"
+        [value]="searchQuery()"
+        (input)="onSearchInput($event)"
+        (focus)="onSearchFocus()"
+        (blur)="onSearchBlur()"
+        (keydown.enter)="selectFirstResult()"
+        (keydown.escape)="clearSearch()"
+      />
+    </div>
+    @if (showResults() && filteredBodies().length > 0) {
+      <div class="search-results">
+        @for (body of filteredBodies(); track body.name) {
+          <button class="search-result-item" (mousedown)="selectFromSearch(body)">
+            <span class="result-icon">{{ body.type === 'star' ? '☀️' : body.type === 'planet' ? '🪐' : body.type === 'satellite' ? '🛰️' : '🌙' }}</span>
+            <span class="result-name">{{ body.name }}</span>
+            <span class="result-type">{{ t('type.' + body.type) }}</span>
+          </button>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- Info panel -->
+  @if (selectedBody(); as body) {
+    <div class="info-panel">
+      <button class="close-btn" (click)="closeInfoPanel()" aria-label="Close">&times;</button>
+      <div class="info-header">
+        <span class="body-icon">{{ body.type === 'star' ? '☀️' : body.type === 'planet' ? '🪐' : body.type === 'satellite' ? '🛰️' : '🌙' }}</span>
+        <div>
+          <h2>{{ body.name }}</h2>
+          <span class="body-type">{{ t('type.' + body.type) }}</span>
+        </div>
+      </div>
+      <p class="description">{{ getDesc(body.name, body.description) }}</p>
+      <div class="facts">
+        @for (fact of body.facts; track fact.label) {
+          <div class="fact-row">
+            <span class="fact-label">{{ fl(fact.label) }}</span>
+            <span class="fact-value">{{ fact.value }}</span>
+          </div>
+        }
+      </div>
+      @if (body.moons && body.moons.length > 0) {
+        <div class="moons-section">
+          <h3>{{ t('label.moons') }}</h3>
+          <div class="moon-chips">
+            @for (moon of body.moons; track moon.name) {
+              <button class="moon-chip" (click)="selectFromSearch(moon)">{{ moon.name }}</button>
+            }
+          </div>
+        </div>
+      }
+      @if (body.satellites && body.satellites.length > 0) {
+        <div class="moons-section">
+          <h3>{{ t('label.satellites') }}</h3>
+          <div class="moon-chips">
+            @for (sat of body.satellites; track sat.name) {
+              <button class="moon-chip satellite-chip" (click)="selectFromSearch(sat)">{{ sat.name }}</button>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Galaxy info panel -->
+  @if (selectedGalaxy(); as galaxy) {
+    <div class="info-panel galaxy-panel">
+      <button class="close-btn" (click)="closeGalaxyPanel()" aria-label="Close">&times;</button>
+      <div class="info-header">
+        <span class="body-icon">🌌</span>
+        <div>
+          <h2>{{ galaxy.name }}</h2>
+          <span class="body-type galaxy-type">{{ t('galtype.' + galaxy.type) }}</span>
+        </div>
+      </div>
+      <p class="description">{{ getDesc(galaxy.name, galaxy.description) }}</p>
+      <div class="facts">
+        <div class="fact-row">
+          <span class="fact-label">{{ t('label.distance') }}</span>
+          <span class="fact-value">{{ galaxy.distance }}</span>
+        </div>
+        <div class="fact-row">
+          <span class="fact-label">{{ t('label.diameter') }}</span>
+          <span class="fact-value">{{ galaxy.diameter }}</span>
+        </div>
+        <div class="fact-row">
+          <span class="fact-label">{{ t('label.stars') }}</span>
+          <span class="fact-value">{{ galaxy.stars }}</span>
+        </div>
+        @for (fact of galaxy.facts; track fact.label) {
+          <div class="fact-row">
+            <span class="fact-label">{{ fl(fact.label) }}</span>
+            <span class="fact-value">{{ fact.value }}</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Galactic object info panel -->
+  @if (selectedGalacticObject(); as galObj) {
+    <div class="info-panel galactic-panel">
+      <button class="close-btn" (click)="closeGalacticObjectPanel()" aria-label="Close">&times;</button>
+      <div class="info-header">
+        <span class="body-icon">{{ galObj.type === 'black-hole' ? '🕳️' : galObj.type === 'star' ? '⭐' : galObj.type === 'nebula' ? '🌫️' : galObj.type === 'pulsar' ? '💫' : galObj.type === 'supernova-remnant' ? '💥' : galObj.type === 'planetary-system' ? '🪐' : '✨' }}</span>
+        <div>
+          <h2>{{ galObj.name }}</h2>
+          <span class="body-type galactic-type">{{ t('type.' + galObj.type) }}</span>
+        </div>
+      </div>
+      <p class="description">{{ getDesc(galObj.name, galObj.description) }}</p>
+      <div class="facts">
+        @for (fact of galObj.facts; track fact.label) {
+          <div class="fact-row">
+            <span class="fact-label">{{ fl(fact.label) }}</span>
+            <span class="fact-value">{{ fact.value }}</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- View mode indicator -->
+  @if (insideGalaxy()) {
+    <div class="view-indicator inside-galaxy">
+      <span class="view-icon">🔭</span>
+      <span>{{ t('view.inside') }} {{ selectedGalaxy()?.name }}</span>
+      <span class="view-hint">{{ t('view.clickObjects') }}</span>
+      <button class="back-btn" (click)="backToGalaxyView()">{{ t('btn.back') }}</button>
+    </div>
+  } @else if (galaxyView()) {
+    <div class="view-indicator">
+      <span class="view-icon">🌌</span>
+      <span>{{ t('view.localGroup') }}</span>
+      <span class="view-hint">{{ t('view.clickExplore') }}</span>
+    </div>
+  }
+
+  <!-- Controls hint -->
+  <div class="controls-hint">
+    <span>{{ t('ctrl.click') }}</span>
+    <span class="separator">|</span>
+    <span>{{ t('ctrl.drag') }}</span>
+    <span class="separator">|</span>
+    <span>{{ t('ctrl.scroll') }}</span>
+    <span class="separator">|</span>
+    <button class="pause-btn" (click)="togglePause()">{{ paused() ? t('btn.resume') : t('btn.pause') }}</button>
+    <span class="separator">|</span>
+    <button class="follow-btn" [class.active]="followMode()" (click)="toggleFollowMode()">{{ followMode() ? t('btn.follow.on') : t('btn.follow.off') }}</button>
+    <span class="separator">|</span>
+    <button class="theme-btn" (click)="toggleTheme()">{{ lightMode() ? t('btn.dark') : t('btn.light') }}</button>
+    <span class="separator">|</span>
+    <button class="reset-btn" (click)="resetView()">{{ t('btn.reset') }}</button>
+    <span class="separator">|</span>
+    <button class="changelog-btn" (click)="toggleChangelog()">📋</button>
+    <span class="separator">|</span>
+    <div class="lang-selector">
+      <button class="lang-btn" [class.active]="lang() === 'en'" (click)="setLang('en')">EN</button>
+      <button class="lang-btn" [class.active]="lang() === 'ro'" (click)="setLang('ro')">RO</button>
+      <button class="lang-btn" [class.active]="lang() === 'ru'" (click)="setLang('ru')">RU</button>
+    </div>
+  </div>
+
+  <!-- Changelog modal -->
+  @if (showChangelog()) {
+    <div class="changelog-backdrop" (click)="toggleChangelog()">
+      <div class="changelog-modal" (click)="$event.stopPropagation()">
+        <div class="changelog-header">
+          <h2>{{ t('cl.title') }}</h2>
+          <button class="changelog-close" (click)="toggleChangelog()" aria-label="Close">&times;</button>
+        </div>
+        <div class="changelog-body">
+          @for (entry of changelog; track entry.version) {
+            <div class="changelog-entry">
+              <div class="changelog-version">
+                <span class="version-badge">v{{ entry.version }}</span>
+                <span class="version-icon">{{ entry.icon }}</span>
+              </div>
+              <div class="changelog-text">
+                <h3>{{ t(entry.key + '.title') }}</h3>
+                <p>{{ t(entry.key + '.desc') }}</p>
+                <div class="changelog-prompt">
+                  <span class="prompt-label">{{ t('cl.prompt') }}</span>
+                  <q>{{ entry.prompt }}</q>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

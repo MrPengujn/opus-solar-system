@@ -1,0 +1,6 @@
+services:
+  solar-sys-observ:
+    build: .
+    ports:
+      - "50001:80"
+    restart: unless-stopped
