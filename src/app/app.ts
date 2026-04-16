@@ -84,6 +84,7 @@ export class App implements OnDestroy {
     { version: '2.2', icon: '🌌', key: 'cl.galaxyMain', prompt: 'Now make the galaxies view to be the main view instead of the solar system one. Fix search to show proper results because now it only shows milky way results. Add the option to search by keywords such as "black hole" etc. Add a new box on the left side that will show information about the currently open galaxy, together with a back button to go to the galaxies view.' },
     { version: '2.3', icon: '❓', key: 'cl.welcome', prompt: 'Now when entering the page for the first time, show the user a modal where it\'s described how to use the app and all the key binds and mouse movements they can do. After the user closes this modal, add a button to let them re-open it. Make sure to include this in the changelog.' },
     { version: '2.4', icon: '📱', key: 'cl.responsive', prompt: 'When entering a galaxy and clicking on an object inside of that galaxy, the left window for going back to the main view disappears and there is no way of going back, please fix that so that it does not disappear. Also make the UI responsive so that it renders properly on mobile etc. Also include this in the changelog.' },
+    { version: '2.5', icon: '🌌', key: 'cl.milkyWay', prompt: 'Now make the milky way display all the other known astronomical objects that it has besides our solar system. Include this in the changelog.' },
   ];
 
   allBodies: CelestialBody[] = [];
@@ -248,22 +249,12 @@ export class App implements OnDestroy {
     this.showResults.set(false);
 
     if (result.kind === 'galaxy' && result.galaxy) {
-      if (result.galaxy.name === 'Milky Way') {
-        // Go to solar system
-        if (this.insideGalaxy()) this.exitGalaxyInternalView();
-        this.exitGalaxyView();
-        this.animateCameraTo(
-          new THREE.Vector3(0, 100, 180),
-          new THREE.Vector3(0, 0, 0),
-        );
-      } else {
-        // Go to galaxy internal view
-        if (this.insideGalaxy()) this.exitGalaxyInternalView();
-        if (!this.currentGalaxyView) this.enterGalaxyView();
-        this.selectedGalaxy.set(result.galaxy);
-        this.selectedBody.set(null);
-        this.enterGalaxyInternalView(result.galaxy);
-      }
+      // Go to galaxy internal view (all galaxies including Milky Way)
+      if (this.insideGalaxy()) this.exitGalaxyInternalView();
+      if (!this.currentGalaxyView) this.enterGalaxyView();
+      this.selectedGalaxy.set(result.galaxy);
+      this.selectedBody.set(null);
+      this.enterGalaxyInternalView(result.galaxy);
     } else if (result.kind === 'galactic' && result.galacticObj && result.galaxyName) {
       // Navigate to galaxy, then select the object
       const galaxy = GALAXIES.find(g => g.name === result.galaxyName);
@@ -954,8 +945,18 @@ export class App implements OnDestroy {
           obj = obj.parent;
         }
         if (galObj) {
-          this.selectedGalacticObject.set(galObj);
-          this.zoomToGalacticObject(galObj.name);
+          if (galObj.name === 'Solar System') {
+            // Transition to the solar system view
+            this.exitGalaxyInternalView();
+            this.exitGalaxyView();
+            this.animateCameraTo(
+              new THREE.Vector3(0, 100, 180),
+              new THREE.Vector3(0, 0, 0),
+            );
+          } else {
+            this.selectedGalacticObject.set(galObj);
+            this.zoomToGalacticObject(galObj.name);
+          }
         }
       }
       return;
@@ -967,19 +968,10 @@ export class App implements OnDestroy {
       if (hits.length > 0) {
         const galaxy = this.galaxyMeshToData.get(hits[0].object as THREE.Mesh);
         if (galaxy) {
-          if (galaxy.name === 'Milky Way') {
-            // Clicking Milky Way transitions back to solar system
-            this.exitGalaxyView();
-            this.animateCameraTo(
-              new THREE.Vector3(0, 100, 180),
-              new THREE.Vector3(0, 0, 0),
-            );
-          } else {
-            // Enter internal view of this galaxy
-            this.selectedGalaxy.set(galaxy);
-            this.selectedBody.set(null);
-            this.enterGalaxyInternalView(galaxy);
-          }
+          // Enter internal view of this galaxy (including Milky Way)
+          this.selectedGalaxy.set(galaxy);
+          this.selectedBody.set(null);
+          this.enterGalaxyInternalView(galaxy);
         }
       }
       return;
