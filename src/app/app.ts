@@ -65,6 +65,7 @@ export class App implements OnDestroy {
   followMode = signal(false);
   showChangelog = signal(false);
   showWelcome = signal(!localStorage.getItem('welcomeDismissed'));
+  showMobileMenu = signal(false);
   lang = signal<Lang>('en');
 
   changelog = [
@@ -82,6 +83,7 @@ export class App implements OnDestroy {
     { version: '2.1', icon: '🐳', key: 'cl.docker', prompt: 'Now create a docker-compose to build the project so that I can put it on my server, it must run on port 50001, make sure to also include this in the changelog.' },
     { version: '2.2', icon: '🌌', key: 'cl.galaxyMain', prompt: 'Now make the galaxies view to be the main view instead of the solar system one. Fix search to show proper results because now it only shows milky way results. Add the option to search by keywords such as "black hole" etc. Add a new box on the left side that will show information about the currently open galaxy, together with a back button to go to the galaxies view.' },
     { version: '2.3', icon: '❓', key: 'cl.welcome', prompt: 'Now when entering the page for the first time, show the user a modal where it\'s described how to use the app and all the key binds and mouse movements they can do. After the user closes this modal, add a button to let them re-open it. Make sure to include this in the changelog.' },
+    { version: '2.4', icon: '📱', key: 'cl.responsive', prompt: 'When entering a galaxy and clicking on an object inside of that galaxy, the left window for going back to the main view disappears and there is no way of going back, please fix that so that it does not disappear. Also make the UI responsive so that it renders properly on mobile etc. Also include this in the changelog.' },
   ];
 
   allBodies: CelestialBody[] = [];
@@ -346,6 +348,10 @@ export class App implements OnDestroy {
 
   openWelcome(): void {
     this.showWelcome.set(true);
+  }
+
+  toggleMobileMenu(): void {
+    this.showMobileMenu.update((v) => !v);
   }
 
   resetView(): void {
@@ -949,7 +955,6 @@ export class App implements OnDestroy {
         }
         if (galObj) {
           this.selectedGalacticObject.set(galObj);
-          this.selectedGalaxy.set(null);
           this.zoomToGalacticObject(galObj.name);
         }
       }

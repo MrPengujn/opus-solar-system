@@ -198,8 +198,8 @@
     </div>
   }
 
-  <!-- Controls hint -->
-  <div class="controls-hint">
+  <!-- Controls hint (desktop) -->
+  <div class="controls-hint desktop-controls">
     <span>{{ t('ctrl.click') }}</span>
     <span class="separator">|</span>
     <span>{{ t('ctrl.drag') }}</span>
@@ -224,6 +224,31 @@
       <button class="lang-btn" [class.active]="lang() === 'ru'" (click)="setLang('ru')">RU</button>
     </div>
   </div>
+
+  <!-- Mobile controls -->
+  <button class="mobile-menu-toggle" (click)="toggleMobileMenu()">⚙️</button>
+  @if (showMobileMenu()) {
+    <div class="mobile-menu-backdrop" (click)="toggleMobileMenu()"></div>
+    <div class="mobile-menu">
+      <div class="mobile-menu-header">
+        <span>{{ t('welcome.controls') }}</span>
+        <button class="mobile-menu-close" (click)="toggleMobileMenu()">&times;</button>
+      </div>
+      <div class="mobile-menu-items">
+        <button class="mobile-menu-item" (click)="togglePause()">{{ paused() ? t('btn.resume') : t('btn.pause') }}</button>
+        <button class="mobile-menu-item" [class.active]="followMode()" (click)="toggleFollowMode()">{{ followMode() ? t('btn.follow.on') : t('btn.follow.off') }}</button>
+        <button class="mobile-menu-item" (click)="toggleTheme()">{{ lightMode() ? t('btn.dark') : t('btn.light') }}</button>
+        <button class="mobile-menu-item" (click)="resetView(); toggleMobileMenu()">{{ t('btn.reset') }}</button>
+        <button class="mobile-menu-item" (click)="toggleChangelog(); toggleMobileMenu()">📋 {{ t('cl.title') }}</button>
+        <button class="mobile-menu-item" (click)="openWelcome(); toggleMobileMenu()">❓ {{ t('welcome.controls') }}</button>
+      </div>
+      <div class="mobile-lang-selector">
+        <button class="lang-btn" [class.active]="lang() === 'en'" (click)="setLang('en')">EN</button>
+        <button class="lang-btn" [class.active]="lang() === 'ro'" (click)="setLang('ro')">RO</button>
+        <button class="lang-btn" [class.active]="lang() === 'ru'" (click)="setLang('ru')">RU</button>
+      </div>
+    </div>
+  }
 
   <!-- Changelog modal -->
   @if (showChangelog()) {
