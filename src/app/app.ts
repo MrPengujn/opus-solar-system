@@ -32,6 +32,18 @@ interface GalacticSceneObject {
   angle: number;
 }
 
+interface SearchResult {
+  kind: 'galaxy' | 'galactic' | 'body';
+  galaxy?: Galaxy;
+  galacticObj?: GalacticObject;
+  galaxyName?: string;
+  body?: CelestialBody;
+  label: string;
+  icon: string;
+  typeLabel: string;
+  subtitle?: string;
+}
+
 @Component({
   selector: 'app-root',
   imports: [FormsModule],
@@ -46,7 +58,7 @@ export class App implements OnDestroy {
   showResults = signal(false);
   paused = signal(false);
   lightMode = signal(false);
-  galaxyView = signal(false);
+  galaxyView = signal(true);
   selectedGalaxy = signal<Galaxy | null>(null);
   selectedGalacticObject = signal<GalacticObject | null>(null);
   insideGalaxy = signal(false);
@@ -67,9 +79,56 @@ export class App implements OnDestroy {
     { version: '1.9', icon: '💫', key: 'cl.galacticBodies', prompt: 'Can you now work on all the other galactic bodies to make them look much better too?' },
     { version: '2.0', icon: '📋', key: 'cl.changelog', prompt: 'Can you add a button that will open a modal and will describe, step by step, all the major features that you implemented/changes in this entire editor instance and also make sure to add all future major changes in the future (changelog).' },
     { version: '2.1', icon: '🐳', key: 'cl.docker', prompt: 'Now create a docker-compose to build the project so that I can put it on my server, it must run on port 50001, make sure to also include this in the changelog.' },
+    { version: '2.2', icon: '🌌', key: 'cl.galaxyMain', prompt: 'Now make the galaxies view to be the main view instead of the solar system one. Fix search to show proper results because now it only shows milky way results. Add the option to search by keywords such as "black hole" etc. Add a new box on the left side that will show information about the currently open galaxy, together with a back button to go to the galaxies view.' },
   ];
 
   allBodies: CelestialBody[] = [];
+
+  // Unified search result type
+  searchResults = computed(() => {
+    const q = this.searchQuery().toLowerCase().trim();
+    if (!q) return [] as SearchResult[];
+    const results: SearchResult[] = [];
+
+    // Search galaxies
+    for (const g of GALAXIES) {
+      if (g.name.toLowerCase().includes(q) || g.type.toLowerCase().includes(q)) {
+        results.push({ kind: 'galaxy', galaxy: g, label: g.name, icon: '🌌', typeLabel: 'galtype.' + g.type });
+      }
+    }
+
+    // Search all galactic objects across all galaxies (by name, type, or keyword)
+    for (const sys of GALAXY_SYSTEMS) {
+      for (const obj of sys.objects) {
+        const typeName = obj.type.replace(/-/g, ' ');
+        if (obj.name.toLowerCase().includes(q) || typeName.includes(q)) {
+          results.push({ kind: 'galactic', galacticObj: obj, galaxyName: sys.galaxyName, label: obj.name, icon: this.galacticIcon(obj.type), typeLabel: 'type.' + obj.type, subtitle: sys.galaxyName });
+        }
+      }
+    }
+
+    // Search solar system bodies
+    for (const b of this.allBodies) {
+      if (b.name.toLowerCase().includes(q) || b.type.toLowerCase().includes(q)) {
+        results.push({ kind: 'body', body: b, label: b.name, icon: b.type === 'star' ? '☀️' : b.type === 'planet' ? '🪐' : b.type === 'satellite' ? '🛰️' : '🌙', typeLabel: 'type.' + b.type, subtitle: 'Milky Way · Solar System' });
+      }
+    }
+
+    return results;
+  });
+
+  private galacticIcon(type: string): string {
+    switch (type) {
+      case 'black-hole': return '🕳️';
+      case 'star': return '⭐';
+      case 'nebula': return '🌫️';
+      case 'pulsar': return '💫';
+      case 'supernova-remnant': return '💥';
+      case 'planetary-system': return '🪐';
+      case 'quasar': return '✨';
+      default: return '🔭';
+    }
+  }
 
   filteredBodies = computed(() => {
     const q = this.searchQuery().toLowerCase().trim();
@@ -141,6 +200,8 @@ export class App implements OnDestroy {
       this.initScene();
       this.createSolarSystem();
       this.createGalaxies();
+      this.currentGalaxyView = true;
+      this.starfield.visible = false;
       this.animate();
     });
   }
@@ -172,13 +233,58 @@ export class App implements OnDestroy {
     this.selectedBody.set(body);
     this.searchQuery.set('');
     this.showResults.set(false);
+    // Make sure we're in solar system view
+    if (this.insideGalaxy()) this.exitGalaxyInternalView();
+    if (this.currentGalaxyView) this.exitGalaxyView();
     this.zoomToBody(body.name);
   }
 
+  selectSearchResult(result: SearchResult): void {
+    this.searchQuery.set('');
+    this.showResults.set(false);
+
+    if (result.kind === 'galaxy' && result.galaxy) {
+      if (result.galaxy.name === 'Milky Way') {
+        // Go to solar system
+        if (this.insideGalaxy()) this.exitGalaxyInternalView();
+        this.exitGalaxyView();
+        this.animateCameraTo(
+          new THREE.Vector3(0, 100, 180),
+          new THREE.Vector3(0, 0, 0),
+        );
+      } else {
+        // Go to galaxy internal view
+        if (this.insideGalaxy()) this.exitGalaxyInternalView();
+        if (!this.currentGalaxyView) this.enterGalaxyView();
+        this.selectedGalaxy.set(result.galaxy);
+        this.selectedBody.set(null);
+        this.enterGalaxyInternalView(result.galaxy);
+      }
+    } else if (result.kind === 'galactic' && result.galacticObj && result.galaxyName) {
+      // Navigate to galaxy, then select the object
+      const galaxy = GALAXIES.find(g => g.name === result.galaxyName);
+      if (galaxy) {
+        if (this.currentInternalGalaxy !== galaxy.name) {
+          if (this.insideGalaxy()) this.exitGalaxyInternalView();
+          if (!this.currentGalaxyView) this.enterGalaxyView();
+          this.selectedGalaxy.set(galaxy);
+          this.enterGalaxyInternalView(galaxy);
+        }
+        // After entering, select the galactic object
+        setTimeout(() => {
+          this.selectedGalacticObject.set(result.galacticObj!);
+          this.zoomToGalacticObject(result.galacticObj!.name);
+        }, 100);
+      }
+    } else if (result.kind === 'body' && result.body) {
+      this.selectFromSearch(result.body);
+    }
+  }
+
   selectFirstResult(): void {
-    const list = this.filteredBodies();
-    if (list.length > 0) {
-      this.selectFromSearch(list[0]);
+    const results = this.searchResults();
+    if (results.length > 0) {
+      this.selectSearchResult(results[0]);
     }
   }
 
@@ -234,14 +340,15 @@ export class App implements OnDestroy {
   resetView(): void {
     this.selectedBody.set(null);
     this.selectedGalacticObject.set(null);
+    this.selectedGalaxy.set(null);
     if (this.insideGalaxy()) {
       this.exitGalaxyInternalView();
     }
-    if (this.currentGalaxyView) {
-      this.exitGalaxyView();
+    if (!this.currentGalaxyView) {
+      this.enterGalaxyView();
     }
     this.animateCameraTo(
-      new THREE.Vector3(0, 100, 180),
+      new THREE.Vector3(0, 300, 500),
       new THREE.Vector3(0, 0, 0),
     );
   }
@@ -275,7 +382,7 @@ export class App implements OnDestroy {
       0.1,
       10000,
     );
-    this.camera.position.set(0, 100, 180);
+    this.camera.position.set(0, 300, 500);
     this.camera.far = 20000;
     this.camera.updateProjectionMatrix();
 
@@ -298,9 +405,10 @@ export class App implements OnDestroy {
     this.controls.maxDistance = 2000;
 
     this.solarSystemGroup = new THREE.Group();
+    this.solarSystemGroup.visible = false;
     this.scene.add(this.solarSystemGroup);
     this.galaxyGroup = new THREE.Group();
-    this.galaxyGroup.visible = false;
+    this.galaxyGroup.visible = true;
     this.scene.add(this.galaxyGroup);
 
     this.galaxyInternalGroup = new THREE.Group();
@@ -725,12 +833,11 @@ export class App implements OnDestroy {
     this.controls.update();
 
     // Galaxy view transition based on camera distance (skip when inside a galaxy)
+    // Only auto-transition BACK to galaxy view when zooming out from solar system
     if (!this.insideGalaxy()) {
       const camDist = this.camera.position.length();
       if (!this.currentGalaxyView && camDist > this.GALAXY_ZOOM_THRESHOLD) {
         this.enterGalaxyView();
-      } else if (this.currentGalaxyView && !this.lockedInGalaxyView && camDist <= this.GALAXY_ZOOM_THRESHOLD) {
-        this.exitGalaxyView();
       }
     }
 
@@ -1101,5 +1208,14 @@ export class App implements OnDestroy {
         new THREE.Vector3(0, 0, 0),
       );
     }
+  }
+
+  backToGalaxies(): void {
+    this.selectedBody.set(null);
+    this.enterGalaxyView();
+    this.animateCameraTo(
+      new THREE.Vector3(0, 300, 500),
+      new THREE.Vector3(0, 0, 0),
+    );
   }
 }

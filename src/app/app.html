@@ -11,7 +11,7 @@
       <input
         type="text"
         class="search-input"
-        [placeholder]="insideGalaxy() ? t('search.inside') + ' ' + (selectedGalaxy()?.name ?? '') + '...' : galaxyView() ? t('search.galaxy') : t('search.planets')"
+        [placeholder]="t('search.all')"
         [value]="searchQuery()"
         (input)="onSearchInput($event)"
         (focus)="onSearchFocus()"
@@ -20,13 +20,18 @@
         (keydown.escape)="clearSearch()"
       />
     </div>
-    @if (showResults() && filteredBodies().length > 0) {
+    @if (showResults() && searchResults().length > 0) {
       <div class="search-results">
-        @for (body of filteredBodies(); track body.name) {
-          <button class="search-result-item" (mousedown)="selectFromSearch(body)">
-            <span class="result-icon">{{ body.type === 'star' ? '☀️' : body.type === 'planet' ? '🪐' : body.type === 'satellite' ? '🛰️' : '🌙' }}</span>
-            <span class="result-name">{{ body.name }}</span>
-            <span class="result-type">{{ t('type.' + body.type) }}</span>
+        @for (result of searchResults(); track result.label + result.kind) {
+          <button class="search-result-item" (mousedown)="selectSearchResult(result)">
+            <span class="result-icon">{{ result.icon }}</span>
+            <div class="result-info">
+              <span class="result-name">{{ result.label }}</span>
+              @if (result.subtitle) {
+                <span class="result-subtitle">{{ result.subtitle }}</span>
+              }
+            </div>
+            <span class="result-type">{{ t(result.typeLabel) }}</span>
           </button>
         }
       </div>
@@ -76,8 +81,51 @@
     </div>
   }
 
-  <!-- Galaxy info panel -->
-  @if (selectedGalaxy(); as galaxy) {
+  <!-- Combined galaxy navigation + info panel (left side) -->
+  @if (insideGalaxy() && selectedGalaxy(); as galaxy) {
+    <div class="galaxy-info-panel">
+      <button class="back-btn" (click)="backToGalaxyView()">← {{ t('btn.backGalaxies') }}</button>
+      <div class="galaxy-nav-header">
+        <span class="nav-icon">🔭</span>
+        <div>
+          <span class="nav-title">{{ t('view.inside') }} {{ galaxy.name }}</span>
+          <span class="nav-hint">{{ t('view.clickObjects') }}</span>
+        </div>
+      </div>
+      <div class="galaxy-nav-divider"></div>
+      <div class="info-header">
+        <span class="body-icon">🌌</span>
+        <div>
+          <h2>{{ galaxy.name }}</h2>
+          <span class="body-type galaxy-type">{{ t('galtype.' + galaxy.type) }}</span>
+        </div>
+      </div>
+      <p class="description">{{ getDesc(galaxy.name, galaxy.description) }}</p>
+      <div class="facts">
+        <div class="fact-row">
+          <span class="fact-label">{{ t('label.distance') }}</span>
+          <span class="fact-value">{{ galaxy.distance }}</span>
+        </div>
+        <div class="fact-row">
+          <span class="fact-label">{{ t('label.diameter') }}</span>
+          <span class="fact-value">{{ galaxy.diameter }}</span>
+        </div>
+        <div class="fact-row">
+          <span class="fact-label">{{ t('label.stars') }}</span>
+          <span class="fact-value">{{ galaxy.stars }}</span>
+        </div>
+        @for (fact of galaxy.facts; track fact.label) {
+          <div class="fact-row">
+            <span class="fact-label">{{ fl(fact.label) }}</span>
+            <span class="fact-value">{{ fact.value }}</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Galaxy info panel (right side) — shown from galaxy view click -->
+  @if (!insideGalaxy() && selectedGalaxy(); as galaxy) {
     <div class="info-panel galaxy-panel">
       <button class="close-btn" (click)="closeGalaxyPanel()" aria-label="Close">&times;</button>
       <div class="info-header">
@@ -135,18 +183,18 @@
   }
 
   <!-- View mode indicator -->
-  @if (insideGalaxy()) {
-    <div class="view-indicator inside-galaxy">
-      <span class="view-icon">🔭</span>
-      <span>{{ t('view.inside') }} {{ selectedGalaxy()?.name }}</span>
-      <span class="view-hint">{{ t('view.clickObjects') }}</span>
-      <button class="back-btn" (click)="backToGalaxyView()">{{ t('btn.back') }}</button>
-    </div>
-  } @else if (galaxyView()) {
+  @if (galaxyView() && !insideGalaxy()) {
     <div class="view-indicator">
       <span class="view-icon">🌌</span>
       <span>{{ t('view.localGroup') }}</span>
       <span class="view-hint">{{ t('view.clickExplore') }}</span>
+    </div>
+  } @else if (!galaxyView()) {
+    <div class="view-indicator solar-system">
+      <span class="view-icon">☀️</span>
+      <span>{{ t('view.solarSystem') }}</span>
+      <span class="view-hint">{{ t('view.clickObjects') }}</span>
+      <button class="back-btn" (click)="backToGalaxies()">← {{ t('btn.backGalaxies') }}</button>
     </div>
   }
 
