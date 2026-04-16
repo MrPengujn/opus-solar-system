@@ -216,6 +216,8 @@
     <span class="separator">|</span>
     <button class="changelog-btn" (click)="toggleChangelog()">📋</button>
     <span class="separator">|</span>
+    <button class="help-btn" (click)="openWelcome()">❓</button>
+    <span class="separator">|</span>
     <div class="lang-selector">
       <button class="lang-btn" [class.active]="lang() === 'en'" (click)="setLang('en')">EN</button>
       <button class="lang-btn" [class.active]="lang() === 'ro'" (click)="setLang('ro')">RO</button>
@@ -248,6 +250,51 @@
               </div>
             </div>
           }
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Welcome modal -->
+  @if (showWelcome()) {
+    <div class="welcome-backdrop" (click)="dismissWelcome()">
+      <div class="welcome-modal" (click)="$event.stopPropagation()">
+        <div class="welcome-header">
+          <span class="welcome-logo">🔭</span>
+          <h2>{{ t('welcome.title') }}</h2>
+          <p class="welcome-subtitle">{{ t('welcome.subtitle') }}</p>
+        </div>
+        <div class="welcome-body">
+          <div class="welcome-section">
+            <h3>🖱️ {{ t('welcome.nav') }}</h3>
+            <ul>
+              <li>{{ t('welcome.nav.orbit') }}</li>
+              <li>{{ t('welcome.nav.zoom') }}</li>
+              <li>{{ t('welcome.nav.pan') }}</li>
+            </ul>
+          </div>
+          <div class="welcome-section">
+            <h3>🪐 {{ t('welcome.explore') }}</h3>
+            <ul>
+              <li>{{ t('welcome.explore.click') }}</li>
+              <li>{{ t('welcome.explore.search') }}</li>
+              <li>{{ t('welcome.explore.galaxy') }}</li>
+              <li>{{ t('welcome.explore.milky') }}</li>
+            </ul>
+          </div>
+          <div class="welcome-section">
+            <h3>⚙️ {{ t('welcome.controls') }}</h3>
+            <ul>
+              <li><strong>⏸ / ▶</strong> — {{ t('welcome.controls.pause') }}</li>
+              <li><strong>📹</strong> — {{ t('welcome.controls.follow') }}</li>
+              <li><strong>🌙 / ☀️</strong> — {{ t('welcome.controls.theme') }}</li>
+              <li><strong>🔄</strong> — {{ t('welcome.controls.reset') }}</li>
+              <li><strong>EN/RO/RU</strong> — {{ t('welcome.controls.lang') }}</li>
+            </ul>
+          </div>
+        </div>
+        <div class="welcome-footer">
+          <button class="welcome-go-btn" (click)="dismissWelcome()">{{ t('welcome.gotIt') }}</button>
         </div>
       </div>
     </div>

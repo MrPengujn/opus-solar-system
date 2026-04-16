@@ -64,6 +64,7 @@ export class App implements OnDestroy {
   insideGalaxy = signal(false);
   followMode = signal(false);
   showChangelog = signal(false);
+  showWelcome = signal(!localStorage.getItem('welcomeDismissed'));
   lang = signal<Lang>('en');
 
   changelog = [
@@ -80,6 +81,7 @@ export class App implements OnDestroy {
     { version: '2.0', icon: '📋', key: 'cl.changelog', prompt: 'Can you add a button that will open a modal and will describe, step by step, all the major features that you implemented/changes in this entire editor instance and also make sure to add all future major changes in the future (changelog).' },
     { version: '2.1', icon: '🐳', key: 'cl.docker', prompt: 'Now create a docker-compose to build the project so that I can put it on my server, it must run on port 50001, make sure to also include this in the changelog.' },
     { version: '2.2', icon: '🌌', key: 'cl.galaxyMain', prompt: 'Now make the galaxies view to be the main view instead of the solar system one. Fix search to show proper results because now it only shows milky way results. Add the option to search by keywords such as "black hole" etc. Add a new box on the left side that will show information about the currently open galaxy, together with a back button to go to the galaxies view.' },
+    { version: '2.3', icon: '❓', key: 'cl.welcome', prompt: 'Now when entering the page for the first time, show the user a modal where it\'s described how to use the app and all the key binds and mouse movements they can do. After the user closes this modal, add a button to let them re-open it. Make sure to include this in the changelog.' },
   ];
 
   allBodies: CelestialBody[] = [];
@@ -335,6 +337,15 @@ export class App implements OnDestroy {
 
   toggleChangelog(): void {
     this.showChangelog.update((v) => !v);
+  }
+
+  dismissWelcome(): void {
+    this.showWelcome.set(false);
+    localStorage.setItem('welcomeDismissed', '1');
+  }
+
+  openWelcome(): void {
+    this.showWelcome.set(true);
   }
 
   resetView(): void {
