@@ -85,6 +85,7 @@ export class App implements OnDestroy {
     { version: '2.3', icon: '❓', key: 'cl.welcome', prompt: 'Now when entering the page for the first time, show the user a modal where it\'s described how to use the app and all the key binds and mouse movements they can do. After the user closes this modal, add a button to let them re-open it. Make sure to include this in the changelog.' },
     { version: '2.4', icon: '📱', key: 'cl.responsive', prompt: 'When entering a galaxy and clicking on an object inside of that galaxy, the left window for going back to the main view disappears and there is no way of going back, please fix that so that it does not disappear. Also make the UI responsive so that it renders properly on mobile etc. Also include this in the changelog.' },
     { version: '2.5', icon: '🌌', key: 'cl.milkyWay', prompt: 'Now make the milky way display all the other known astronomical objects that it has besides our solar system. Include this in the changelog.' },
+    { version: '2.6', icon: '📱', key: 'cl.mobileFix', prompt: 'On mobile, the screen extends too much and gets out of the normal view, tested on iOS, because of that, the gear icon is not visible and the scrollable information container is also half out of view, fix that. Also the planets seem to be moving at different speeds on different devices, make it move equal on all devices. Include this in the changelog.' },
   ];
 
   allBodies: CelestialBody[] = [];
@@ -774,26 +775,30 @@ export class App implements OnDestroy {
     const dt = this.clock.getDelta();
 
     if (!this.paused()) {
+      // Normalize to 60fps so speed is consistent across all refresh rates
+      const speed = dt * 60;
       for (const obj of this.sceneObjects) {
-        obj.angle += obj.data.orbitalSpeed;
+        obj.angle += obj.data.orbitalSpeed * speed;
         obj.pivot.rotation.y = obj.angle;
-        obj.mesh.rotation.y += obj.data.rotationSpeed;
+        obj.mesh.rotation.y += obj.data.rotationSpeed * speed;
       }
 
       // Animate galactic objects when inside a galaxy
       if (this.insideGalaxy()) {
         for (const obj of this.galacticSceneObjects) {
-          obj.angle += obj.data.orbitalSpeed;
+          obj.angle += obj.data.orbitalSpeed * speed;
           obj.pivot.rotation.y = obj.angle;
-          obj.mesh.rotation.y += obj.data.rotationSpeed;
+          obj.mesh.rotation.y += obj.data.rotationSpeed * speed;
         }
         // Update black hole shader effects
-        this.updateBlackHoleEffects();
+        this.updateBlackHoleEffects(dt);
       }
     }
 
     // Smooth camera follow for selected body
     const sel = this.selectedBody();
+    const lerpFollow = 1 - Math.pow(1 - 0.08, dt * 60);
+    const lerpTrack = 1 - Math.pow(1 - 0.04, dt * 60);
     if (sel && !this.isAnimatingCamera) {
       const so = this.bodyNameToSceneObj.get(sel.name);
       if (so) {
@@ -801,10 +806,10 @@ export class App implements OnDestroy {
         so.mesh.getWorldPosition(wp);
         if (this.followMode()) {
           const offset = this.camera.position.clone().sub(this.controls.target);
-          this.controls.target.lerp(wp, 0.08);
+          this.controls.target.lerp(wp, lerpFollow);
           this.camera.position.copy(this.controls.target).add(offset);
         } else {
-          this.controls.target.lerp(wp, 0.04);
+          this.controls.target.lerp(wp, lerpTrack);
         }
       }
     }
@@ -818,10 +823,10 @@ export class App implements OnDestroy {
         so.mesh.getWorldPosition(wp);
         if (this.followMode()) {
           const offset = this.camera.position.clone().sub(this.controls.target);
-          this.controls.target.lerp(wp, 0.08);
+          this.controls.target.lerp(wp, lerpFollow);
           this.camera.position.copy(this.controls.target).add(offset);
         } else {
-          this.controls.target.lerp(wp, 0.04);
+          this.controls.target.lerp(wp, lerpTrack);
         }
       }
     }
@@ -891,8 +896,8 @@ export class App implements OnDestroy {
 
   private blackHoleTime = 0;
 
-  private updateBlackHoleEffects(): void {
-    this.blackHoleTime += 0.016;
+  private updateBlackHoleEffects(dt: number): void {
+    this.blackHoleTime += dt;
     for (const obj of this.galacticSceneObjects) {
       const g = obj.mesh as THREE.Group;
       if (!g.children) continue;
