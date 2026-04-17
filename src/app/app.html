@@ -210,6 +210,8 @@
     <span class="separator">|</span>
     <button class="follow-btn" [class.active]="followMode()" (click)="toggleFollowMode()">{{ followMode() ? t('btn.follow.on') : t('btn.follow.off') }}</button>
     <span class="separator">|</span>
+    <button class="stars-btn" [class.active]="showStars()" (click)="toggleStars()">{{ showStars() ? t('btn.stars.on') : t('btn.stars.off') }}</button>
+    <span class="separator">|</span>
     <button class="theme-btn" (click)="toggleTheme()">{{ lightMode() ? t('btn.dark') : t('btn.light') }}</button>
     <span class="separator">|</span>
     <button class="reset-btn" (click)="resetView()">{{ t('btn.reset') }}</button>
@@ -237,6 +239,7 @@
       <div class="mobile-menu-items">
         <button class="mobile-menu-item" (click)="togglePause()">{{ paused() ? t('btn.resume') : t('btn.pause') }}</button>
         <button class="mobile-menu-item" [class.active]="followMode()" (click)="toggleFollowMode()">{{ followMode() ? t('btn.follow.on') : t('btn.follow.off') }}</button>
+        <button class="mobile-menu-item" [class.active]="showStars()" (click)="toggleStars()">{{ showStars() ? t('btn.stars.on') : t('btn.stars.off') }}</button>
         <button class="mobile-menu-item" (click)="toggleTheme()">{{ lightMode() ? t('btn.dark') : t('btn.light') }}</button>
         <button class="mobile-menu-item" (click)="resetView(); toggleMobileMenu()">{{ t('btn.reset') }}</button>
         <button class="mobile-menu-item" (click)="toggleChangelog(); toggleMobileMenu()">📋 {{ t('cl.title') }}</button>

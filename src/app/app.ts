@@ -66,6 +66,7 @@ export class App implements OnDestroy {
   showChangelog = signal(false);
   showWelcome = signal(!localStorage.getItem('welcomeDismissed'));
   showMobileMenu = signal(false);
+  showStars = signal(true);
   lang = signal<Lang>('en');
 
   changelog = [
@@ -86,9 +87,23 @@ export class App implements OnDestroy {
     { version: '2.4', icon: '📱', key: 'cl.responsive', prompt: 'When entering a galaxy and clicking on an object inside of that galaxy, the left window for going back to the main view disappears and there is no way of going back, please fix that so that it does not disappear. Also make the UI responsive so that it renders properly on mobile etc. Also include this in the changelog.' },
     { version: '2.5', icon: '🌌', key: 'cl.milkyWay', prompt: 'Now make the milky way display all the other known astronomical objects that it has besides our solar system. Include this in the changelog.' },
     { version: '2.6', icon: '📱', key: 'cl.mobileFix', prompt: 'On mobile, the screen extends too much and gets out of the normal view, tested on iOS, because of that, the gear icon is not visible and the scrollable information container is also half out of view, fix that. Also the planets seem to be moving at different speeds on different devices, make it move equal on all devices. Include this in the changelog.' },
+    { version: '2.7', icon: '🌐', key: 'cl.3dGalactic', prompt: 'Now objects inside of galaxies render on a plane, make them render in three dimensions as close to reality as possible. Include this in the changelog.' },
+    { version: '2.8', icon: '✨', key: 'cl.starsToggle', prompt: 'Make a button that will hide and show star particles to better see the objects. Also, render planets in a 3d way like with galaxies inside of the milky way galaxy too.' },
   ];
 
   allBodies: CelestialBody[] = [];
+
+  // Real orbital inclinations in radians (relative to ecliptic, exaggerated 3x for visibility)
+  private readonly ORBITAL_INCLINATIONS: Record<string, number> = {
+    'Mercury': 7.0 * Math.PI / 180 * 3,
+    'Venus': 3.39 * Math.PI / 180 * 3,
+    'Earth': 0,
+    'Mars': 1.85 * Math.PI / 180 * 3,
+    'Jupiter': 1.31 * Math.PI / 180 * 3,
+    'Saturn': 2.49 * Math.PI / 180 * 3,
+    'Uranus': 0.77 * Math.PI / 180 * 3,
+    'Neptune': 1.77 * Math.PI / 180 * 3,
+  };
 
   // Unified search result type
   searchResults = computed(() => {
@@ -346,6 +361,19 @@ export class App implements OnDestroy {
     this.showMobileMenu.update((v) => !v);
   }
 
+  toggleStars(): void {
+    this.showStars.update((v) => !v);
+    const visible = this.showStars();
+    this.starfield.visible = visible;
+    if (this.galaxyStarfield) this.galaxyStarfield.visible = visible;
+    // Toggle galaxy internal starfield particles
+    if (this.insideGalaxy()) {
+      this.galaxyInternalGroup.children.forEach((child) => {
+        if (child instanceof THREE.Points) child.visible = visible;
+      });
+    }
+  }
+
   resetView(): void {
     this.selectedBody.set(null);
     this.selectedGalacticObject.set(null);
@@ -529,6 +557,10 @@ export class App implements OnDestroy {
     const pivot = new THREE.Object3D();
     this.solarSystemGroup.add(pivot);
 
+    // Apply real orbital inclination for 3D orbits
+    const inclination = this.ORBITAL_INCLINATIONS[data.name] ?? 0;
+    pivot.rotation.x = inclination;
+
     const geo = new THREE.SphereGeometry(data.radius, 32, 32);
     const mat = this.buildMaterial(data);
     const mesh = new THREE.Mesh(geo, mat);
@@ -539,7 +571,7 @@ export class App implements OnDestroy {
     const startAngle = Math.random() * Math.PI * 2;
     pivot.rotation.y = startAngle;
 
-    this.createOrbitLine(data.orbitalRadius);
+    this.createOrbitLine(data.orbitalRadius, inclination);
 
     const obj: SceneObject = { mesh, data, pivot, angle: startAngle };
     this.sceneObjects.push(obj);
@@ -741,12 +773,15 @@ export class App implements OnDestroy {
   }
 
   // ─── Orbit lines ──────────────────────────────────
-  private createOrbitLine(radius: number): void {
+  private createOrbitLine(radius: number, inclination = 0): void {
     const segs = 128;
     const pts: THREE.Vector3[] = [];
+    const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(inclination, 0, 0));
     for (let i = 0; i <= segs; i++) {
       const t = (i / segs) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(t) * radius, 0, Math.sin(t) * radius));
+      const p = new THREE.Vector3(Math.cos(t) * radius, 0, Math.sin(t) * radius);
+      if (inclination !== 0) p.applyQuaternion(quat);
+      pts.push(p);
     }
     const geo = new THREE.BufferGeometry().setFromPoints(pts);
     const mat = new THREE.LineBasicMaterial({
@@ -922,6 +957,15 @@ export class App implements OnDestroy {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
+  /** Deterministic hash for consistent 3D placement from object name */
+  private hashString(s: string): number {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) {
+      h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
+  }
+
   // ─── Events ───────────────────────────────────────
   private onResize = (): void => {
     this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -1033,6 +1077,7 @@ export class App implements OnDestroy {
     this.solarSystemGroup.visible = false;
     this.starfield.visible = false;
     this.galaxyGroup.visible = true;
+    if (this.galaxyStarfield) this.galaxyStarfield.visible = this.showStars();
     this.selectedBody.set(null);
   }
 
@@ -1041,7 +1086,7 @@ export class App implements OnDestroy {
     this.lockedInGalaxyView = false;
     this.galaxyView.set(false);
     this.solarSystemGroup.visible = true;
-    this.starfield.visible = !this.lightMode();
+    this.starfield.visible = this.showStars() && !this.lightMode();
     this.galaxyGroup.visible = false;
     this.selectedGalaxy.set(null);
   }
@@ -1070,6 +1115,13 @@ export class App implements OnDestroy {
     // Create internal starfield
     this.createGalaxyInternalStarfield();
 
+    // Respect star visibility toggle
+    if (!this.showStars()) {
+      this.galaxyInternalGroup.children.forEach((child) => {
+        if (child instanceof THREE.Points) child.visible = false;
+      });
+    }
+
     // Find the galaxy system data
     const system = GALAXY_SYSTEMS.find((s) => s.galaxyName === galaxy.name);
     if (!system) return;
@@ -1078,9 +1130,9 @@ export class App implements OnDestroy {
       this.createGalacticObject(galObj);
     }
 
-    // Animate camera to overview of internal view
+    // Animate camera to angled overview showing 3D structure
     this.animateCameraTo(
-      new THREE.Vector3(0, 60, 120),
+      new THREE.Vector3(30, 80, 130),
       new THREE.Vector3(0, 0, 0),
     );
   }
@@ -1108,20 +1160,41 @@ export class App implements OnDestroy {
   }
 
   private createGalaxyInternalStarfield(): void {
-    const count = 3000;
+    const count = 4000;
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
 
     for (let i = 0; i < count; i++) {
       const i3 = i * 3;
       const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      const r = 300 + Math.random() * 200;
-      positions[i3] = r * Math.sin(phi) * Math.cos(theta);
-      positions[i3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      positions[i3 + 2] = r * Math.cos(phi);
+
+      if (i < count * 0.7) {
+        // 70% disk stars — flattened distribution resembling a galactic disk
+        const r = 80 + Math.random() * 250;
+        const diskHeight = (4 + r * 0.04) * (Math.random() * 2 - 1); // thicker at edges
+        positions[i3] = r * Math.cos(theta);
+        positions[i3 + 1] = diskHeight;
+        positions[i3 + 2] = r * Math.sin(theta);
+      } else if (i < count * 0.9) {
+        // 20% bulge stars — concentrated near center, rounder
+        const r = 20 + Math.random() * 80;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const bulgeY = r * Math.cos(phi) * 0.5; // slightly flattened bulge
+        const bulgeR = r * Math.sin(phi);
+        positions[i3] = bulgeR * Math.cos(theta);
+        positions[i3 + 1] = bulgeY;
+        positions[i3 + 2] = bulgeR * Math.sin(theta);
+      } else {
+        // 10% halo stars — sparse, spherical
+        const phi = Math.acos(2 * Math.random() - 1);
+        const r = 200 + Math.random() * 300;
+        positions[i3] = r * Math.sin(phi) * Math.cos(theta);
+        positions[i3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        positions[i3 + 2] = r * Math.cos(phi);
+      }
+
       const b = 0.3 + Math.random() * 0.5;
-      colors[i3] = b;
+      colors[i3] = b + Math.random() * 0.1;
       colors[i3 + 1] = b;
       colors[i3 + 2] = b + Math.random() * 0.15;
     }
@@ -1145,15 +1218,83 @@ export class App implements OnDestroy {
     this.galaxyInternalGroup.add(pivot);
 
     const mesh = buildGalacticObjectMesh(data);
+
+    // ── 3D positioning based on object type ──
+    // Use a deterministic hash from the name for consistent placement
+    const h = this.hashString(data.name);
+    const hNorm = (h % 1000) / 1000;           // 0..1
+    const hSign = (h % 2 === 0) ? 1 : -1;      // above or below plane
+
+    // Elevation (Y offset) and orbital tilt vary by type
+    let elevation = 0;
+    let tiltX = 0;
+    let tiltZ = 0;
+    switch (data.type) {
+      case 'black-hole':
+        // Central black holes stay near the galactic plane
+        elevation = hSign * hNorm * 1.5;
+        tiltX = hSign * hNorm * 0.05;
+        break;
+      case 'star':
+        // Stars are in the thin/thick disk — small vertical scatter
+        elevation = hSign * hNorm * 8;
+        tiltX = hSign * hNorm * 0.15;
+        tiltZ = ((h % 500) / 500 - 0.5) * 0.1;
+        break;
+      case 'planetary-system':
+        // Planetary systems are in the galactic disk
+        elevation = hSign * hNorm * 5;
+        tiltX = hSign * hNorm * 0.1;
+        tiltZ = ((h % 500) / 500 - 0.5) * 0.08;
+        break;
+      case 'nebula':
+        // Nebulae are in the disk with moderate scatter
+        elevation = hSign * hNorm * 12;
+        tiltX = hSign * hNorm * 0.2;
+        tiltZ = ((h % 500) / 500 - 0.5) * 0.15;
+        break;
+      case 'supernova-remnant':
+        // Supernova remnants are in the disk, moderate vertical extent
+        elevation = hSign * hNorm * 10;
+        tiltX = hSign * hNorm * 0.18;
+        tiltZ = ((h % 500) / 500 - 0.5) * 0.12;
+        break;
+      case 'pulsar':
+        // Pulsars can have significant kick velocities, wider scatter
+        elevation = hSign * hNorm * 18;
+        tiltX = hSign * hNorm * 0.3;
+        tiltZ = ((h % 500) / 500 - 0.5) * 0.2;
+        break;
+      case 'star-cluster':
+        // Open/star clusters are in the disk
+        elevation = hSign * hNorm * 8;
+        tiltX = hSign * hNorm * 0.12;
+        tiltZ = ((h % 500) / 500 - 0.5) * 0.1;
+        break;
+      case 'globular-cluster':
+        // Globular clusters orbit in the galactic halo — large vertical range
+        elevation = hSign * (10 + hNorm * 30);
+        tiltX = hSign * (0.3 + hNorm * 0.6);
+        tiltZ = ((h % 500) / 500 - 0.5) * 0.4;
+        break;
+      case 'quasar':
+        elevation = hSign * hNorm * 3;
+        tiltX = hSign * hNorm * 0.08;
+        break;
+    }
+
     mesh.position.x = data.orbitalRadius;
+    mesh.position.y = elevation;
 
     const startAngle = Math.random() * Math.PI * 2;
     pivot.rotation.y = startAngle;
+    pivot.rotation.x = tiltX;
+    pivot.rotation.z = tiltZ;
     pivot.add(mesh);
 
-    // Create orbit line for orbiting objects
+    // Create 3D tilted orbit line
     if (data.orbitalRadius > 0) {
-      this.createGalacticOrbitLine(data.orbitalRadius);
+      this.createGalacticOrbitLine(data.orbitalRadius, tiltX, tiltZ, elevation);
     }
 
     const obj: GalacticSceneObject = { mesh, data, pivot, angle: startAngle };
@@ -1183,12 +1324,21 @@ export class App implements OnDestroy {
     }
   }
 
-  private createGalacticOrbitLine(radius: number): void {
+  private createGalacticOrbitLine(radius: number, tiltX = 0, tiltZ = 0, elevation = 0): void {
     const segs = 128;
     const pts: THREE.Vector3[] = [];
+    // Build a tilted elliptical orbit in 3D
+    const euler = new THREE.Euler(tiltX, 0, tiltZ);
+    const quat = new THREE.Quaternion().setFromEuler(euler);
     for (let i = 0; i <= segs; i++) {
       const t = (i / segs) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(t) * radius, 0, Math.sin(t) * radius));
+      const p = new THREE.Vector3(
+        Math.cos(t) * radius,
+        elevation,
+        Math.sin(t) * radius,
+      );
+      p.applyQuaternion(quat);
+      pts.push(p);
     }
     const geo = new THREE.BufferGeometry().setFromPoints(pts);
     const mat = new THREE.LineBasicMaterial({

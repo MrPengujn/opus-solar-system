@@ -343,7 +343,8 @@ canvas {
 
 .pause-btn,
 .theme-btn,
-.follow-btn {
+.follow-btn,
+.stars-btn {
   padding: 5px 14px;
   background: rgba(60, 80, 200, 0.15);
   border: 1px solid rgba(100, 120, 200, 0.25);
@@ -358,7 +359,8 @@ canvas {
   }
 }
 
-.follow-btn.active {
+.follow-btn.active,
+.stars-btn.active {
   background: rgba(60, 180, 120, 0.25);
   border-color: rgba(60, 180, 120, 0.4);
   color: rgba(120, 255, 180, 0.95);
