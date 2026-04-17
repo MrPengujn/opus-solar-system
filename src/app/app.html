@@ -214,7 +214,7 @@
     <span class="separator">|</span>
     <button class="theme-btn" (click)="toggleTheme()">{{ lightMode() ? t('btn.dark') : t('btn.light') }}</button>
     <span class="separator">|</span>
-    <button class="reset-btn" (click)="resetView()">{{ t('btn.reset') }}</button>
+    <button class="home-btn" (click)="resetView()">{{ t('btn.home') }}</button>
     <span class="separator">|</span>
     <button class="changelog-btn" (click)="toggleChangelog()">📋</button>
     <span class="separator">|</span>
@@ -241,7 +241,7 @@
         <button class="mobile-menu-item" [class.active]="followMode()" (click)="toggleFollowMode()">{{ followMode() ? t('btn.follow.on') : t('btn.follow.off') }}</button>
         <button class="mobile-menu-item" [class.active]="showStars()" (click)="toggleStars()">{{ showStars() ? t('btn.stars.on') : t('btn.stars.off') }}</button>
         <button class="mobile-menu-item" (click)="toggleTheme()">{{ lightMode() ? t('btn.dark') : t('btn.light') }}</button>
-        <button class="mobile-menu-item" (click)="resetView(); toggleMobileMenu()">{{ t('btn.reset') }}</button>
+        <button class="mobile-menu-item" (click)="resetView(); toggleMobileMenu()">{{ t('btn.home') }}</button>
         <button class="mobile-menu-item" (click)="toggleChangelog(); toggleMobileMenu()">📋 {{ t('cl.title') }}</button>
         <button class="mobile-menu-item" (click)="openWelcome(); toggleMobileMenu()">❓ {{ t('welcome.controls') }}</button>
       </div>
@@ -294,7 +294,7 @@
         </div>
         <div class="welcome-body">
           <div class="welcome-section">
-            <h3>🖱️ {{ t('welcome.nav') }}</h3>
+            <h3>🧭 {{ t('welcome.nav') }}</h3>
             <ul>
               <li>{{ t('welcome.nav.orbit') }}</li>
               <li>{{ t('welcome.nav.zoom') }}</li>
@@ -316,7 +316,7 @@
               <li><strong>⏸ / ▶</strong> — {{ t('welcome.controls.pause') }}</li>
               <li><strong>📹</strong> — {{ t('welcome.controls.follow') }}</li>
               <li><strong>🌙 / ☀️</strong> — {{ t('welcome.controls.theme') }}</li>
-              <li><strong>🔄</strong> — {{ t('welcome.controls.reset') }}</li>
+              <li><strong>🌌</strong> — {{ t('welcome.controls.reset') }}</li>
               <li><strong>EN/RO/RU</strong> — {{ t('welcome.controls.lang') }}</li>
             </ul>
           </div>

@@ -23,6 +23,9 @@ interface SceneObject {
   data: CelestialBody;
   pivot: THREE.Object3D;
   angle: number;
+  orbitNode?: THREE.Object3D;
+  eccentricity?: number;
+  orbitLine?: THREE.Line;
 }
 
 interface GalacticSceneObject {
@@ -30,6 +33,7 @@ interface GalacticSceneObject {
   data: GalacticObject;
   pivot: THREE.Object3D;
   angle: number;
+  orbitLine?: THREE.Line;
 }
 
 interface SearchResult {
@@ -89,6 +93,7 @@ export class App implements OnDestroy {
     { version: '2.6', icon: '📱', key: 'cl.mobileFix', prompt: 'On mobile, the screen extends too much and gets out of the normal view, tested on iOS, because of that, the gear icon is not visible and the scrollable information container is also half out of view, fix that. Also the planets seem to be moving at different speeds on different devices, make it move equal on all devices. Include this in the changelog.' },
     { version: '2.7', icon: '🌐', key: 'cl.3dGalactic', prompt: 'Now objects inside of galaxies render on a plane, make them render in three dimensions as close to reality as possible. Include this in the changelog.' },
     { version: '2.8', icon: '✨', key: 'cl.starsToggle', prompt: 'Make a button that will hide and show star particles to better see the objects. Also, render planets in a 3d way like with galaxies inside of the milky way galaxy too.' },
+    { version: '2.9', icon: '🛤️', key: 'cl.orbits', prompt: 'Make the trajectories of the object more accurate and realistic, not only circular. Highlight the trajectory of the object when selected. Remove zoom-out exit from solar system. Rename reset view to galaxies home. Add mobile touch gestures to welcome dialog.' },
   ];
 
   allBodies: CelestialBody[] = [];
@@ -103,6 +108,18 @@ export class App implements OnDestroy {
     'Saturn': 2.49 * Math.PI / 180 * 3,
     'Uranus': 0.77 * Math.PI / 180 * 3,
     'Neptune': 1.77 * Math.PI / 180 * 3,
+  };
+
+  // Real orbital eccentricities (exaggerated 2x for visibility while keeping safe perihelion distances)
+  private readonly ORBITAL_ECCENTRICITIES: Record<string, number> = {
+    'Mercury': 0.41,     // real: 0.2056
+    'Venus': 0.014,      // real: 0.0068
+    'Earth': 0.033,      // real: 0.0167
+    'Mars': 0.187,       // real: 0.0934
+    'Jupiter': 0.097,    // real: 0.0484
+    'Saturn': 0.108,     // real: 0.0539
+    'Uranus': 0.095,     // real: 0.0473
+    'Neptune': 0.017,    // real: 0.0086
   };
 
   // Unified search result type
@@ -174,6 +191,9 @@ export class App implements OnDestroy {
   private galaxyMeshes: THREE.Mesh[] = [];
   private galaxyMeshToData = new Map<THREE.Mesh, Galaxy>();
   private readonly GALAXY_ZOOM_THRESHOLD = 450;
+  private highlightedOrbitLine: THREE.Line | null = null;
+  private highlightedOrbitDefault = { color: 0x334466, opacity: 0.35 };
+  private lastHighlightedBodyName: string | null = null;
   private currentGalaxyView = false;
   private lockedInGalaxyView = false;
   private galaxyTime = 0;
@@ -561,19 +581,25 @@ export class App implements OnDestroy {
     const inclination = this.ORBITAL_INCLINATIONS[data.name] ?? 0;
     pivot.rotation.x = inclination;
 
+    const eccentricity = this.ORBITAL_ECCENTRICITIES[data.name] ?? 0;
+
+    // Orbit node groups planet + children at the orbital position
+    const orbitNode = new THREE.Object3D();
+    orbitNode.position.x = data.orbitalRadius;
+    pivot.add(orbitNode);
+
     const geo = new THREE.SphereGeometry(data.radius, 32, 32);
     const mat = this.buildMaterial(data);
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.x = data.orbitalRadius;
     if (data.tilt) mesh.rotation.z = data.tilt;
-    pivot.add(mesh);
+    orbitNode.add(mesh);
 
     const startAngle = Math.random() * Math.PI * 2;
     pivot.rotation.y = startAngle;
 
-    this.createOrbitLine(data.orbitalRadius, inclination);
+    const orbitLine = this.createOrbitLine(data.orbitalRadius, inclination, eccentricity);
 
-    const obj: SceneObject = { mesh, data, pivot, angle: startAngle };
+    const obj: SceneObject = { mesh, data, pivot, angle: startAngle, orbitNode, eccentricity, orbitLine };
     this.sceneObjects.push(obj);
     this.meshToBody.set(mesh, data);
     this.bodyNameToSceneObj.set(data.name, obj);
@@ -589,33 +615,30 @@ export class App implements OnDestroy {
       });
       const ring = new THREE.Mesh(ringGeo, ringMat);
       ring.rotation.x = -Math.PI / 2 + 0.3;
-      ring.position.x = data.orbitalRadius;
-      pivot.add(ring);
+      orbitNode.add(ring);
     }
 
     // Moons
     if (data.moons) {
       for (const moonData of data.moons) {
-        this.createMoon(moonData, mesh, pivot);
+        this.createMoon(moonData, orbitNode);
       }
     }
 
     // Satellites
     if (data.satellites) {
       for (const satData of data.satellites) {
-        this.createSatellite(satData, mesh, pivot);
+        this.createSatellite(satData, orbitNode);
       }
     }
   }
 
   private createMoon(
     data: CelestialBody,
-    parentMesh: THREE.Mesh,
-    parentPivot: THREE.Object3D,
+    parentOrbitNode: THREE.Object3D,
   ): void {
     const moonPivot = new THREE.Object3D();
-    moonPivot.position.x = parentMesh.position.x;
-    parentPivot.add(moonPivot);
+    parentOrbitNode.add(moonPivot);
 
     const geo = new THREE.SphereGeometry(data.radius, 16, 16);
     const mat = new THREE.MeshStandardMaterial({
@@ -638,12 +661,10 @@ export class App implements OnDestroy {
 
   private createSatellite(
     data: CelestialBody,
-    parentMesh: THREE.Mesh,
-    parentPivot: THREE.Object3D,
+    parentOrbitNode: THREE.Object3D,
   ): void {
     const satPivot = new THREE.Object3D();
-    satPivot.position.x = parentMesh.position.x;
-    parentPivot.add(satPivot);
+    parentOrbitNode.add(satPivot);
 
     const model = buildSatelliteModel(data.name, data.radius * 3);
     model.position.x = data.orbitalRadius;
@@ -773,13 +794,16 @@ export class App implements OnDestroy {
   }
 
   // ─── Orbit lines ──────────────────────────────────
-  private createOrbitLine(radius: number, inclination = 0): void {
+  private createOrbitLine(radius: number, inclination = 0, eccentricity = 0): THREE.Line {
     const segs = 128;
     const pts: THREE.Vector3[] = [];
     const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(inclination, 0, 0));
     for (let i = 0; i <= segs; i++) {
       const t = (i / segs) * Math.PI * 2;
-      const p = new THREE.Vector3(Math.cos(t) * radius, 0, Math.sin(t) * radius);
+      const r = eccentricity > 0
+        ? radius * (1 - eccentricity * eccentricity) / (1 + eccentricity * Math.cos(t))
+        : radius;
+      const p = new THREE.Vector3(Math.cos(t) * r, 0, Math.sin(t) * r);
       if (inclination !== 0) p.applyQuaternion(quat);
       pts.push(p);
     }
@@ -789,7 +813,9 @@ export class App implements OnDestroy {
       transparent: true,
       opacity: 0.35,
     });
-    this.solarSystemGroup.add(new THREE.Line(geo, mat));
+    const line = new THREE.Line(geo, mat);
+    this.solarSystemGroup.add(line);
+    return line;
   }
 
   // ─── Galaxy creation ──────────────────────────────
@@ -814,7 +840,24 @@ export class App implements OnDestroy {
       const speed = dt * 60;
       for (const obj of this.sceneObjects) {
         obj.angle += obj.data.orbitalSpeed * speed;
-        obj.pivot.rotation.y = obj.angle;
+        // Kepler elliptical orbit: solve mean anomaly → true anomaly
+        if (obj.eccentricity && obj.orbitNode) {
+          const e = obj.eccentricity;
+          const M = ((obj.angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+          let E = M;
+          for (let k = 0; k < 5; k++) {
+            E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+          }
+          const trueAnomaly = 2 * Math.atan2(
+            Math.sqrt(1 + e) * Math.sin(E / 2),
+            Math.sqrt(1 - e) * Math.cos(E / 2),
+          );
+          const a = obj.data.orbitalRadius;
+          obj.pivot.rotation.y = trueAnomaly;
+          obj.orbitNode.position.x = a * (1 - e * e) / (1 + e * Math.cos(trueAnomaly));
+        } else {
+          obj.pivot.rotation.y = obj.angle;
+        }
         obj.mesh.rotation.y += obj.data.rotationSpeed * speed;
       }
 
@@ -880,13 +923,28 @@ export class App implements OnDestroy {
 
     this.controls.update();
 
-    // Galaxy view transition based on camera distance (skip when inside a galaxy)
-    // Only auto-transition BACK to galaxy view when zooming out from solar system
-    if (!this.insideGalaxy()) {
-      const camDist = this.camera.position.length();
-      if (!this.currentGalaxyView && camDist > this.GALAXY_ZOOM_THRESHOLD) {
-        this.enterGalaxyView();
+    // Highlight orbit of selected body or galactic object
+    const selName = this.selectedBody()?.name ?? this.selectedGalacticObject()?.name ?? null;
+    if (selName !== this.lastHighlightedBodyName) {
+      if (this.highlightedOrbitLine) {
+        const m = this.highlightedOrbitLine.material as THREE.LineBasicMaterial;
+        m.color.set(this.highlightedOrbitDefault.color);
+        m.opacity = this.highlightedOrbitDefault.opacity;
+        this.highlightedOrbitLine = null;
       }
+      if (selName) {
+        const so = this.bodyNameToSceneObj.get(selName);
+        const gso = this.galacticNameToSceneObj.get(selName);
+        const line = so?.orbitLine ?? gso?.orbitLine;
+        if (line) {
+          const m = line.material as THREE.LineBasicMaterial;
+          this.highlightedOrbitDefault = { color: m.color.getHex(), opacity: m.opacity };
+          m.color.set(0xeeeeff);
+          m.opacity = 0.9;
+          this.highlightedOrbitLine = line;
+        }
+      }
+      this.lastHighlightedBodyName = selName;
     }
 
     // Galaxy animations
@@ -1293,11 +1351,12 @@ export class App implements OnDestroy {
     pivot.add(mesh);
 
     // Create 3D tilted orbit line
+    let orbitLine: THREE.Line | undefined;
     if (data.orbitalRadius > 0) {
-      this.createGalacticOrbitLine(data.orbitalRadius, tiltX, tiltZ, elevation);
+      orbitLine = this.createGalacticOrbitLine(data.orbitalRadius, tiltX, tiltZ, elevation);
     }
 
-    const obj: GalacticSceneObject = { mesh, data, pivot, angle: startAngle };
+    const obj: GalacticSceneObject = { mesh, data, pivot, angle: startAngle, orbitLine };
     this.galacticSceneObjects.push(obj);
     this.galacticNameToSceneObj.set(data.name, obj);
 
@@ -1324,7 +1383,7 @@ export class App implements OnDestroy {
     }
   }
 
-  private createGalacticOrbitLine(radius: number, tiltX = 0, tiltZ = 0, elevation = 0): void {
+  private createGalacticOrbitLine(radius: number, tiltX = 0, tiltZ = 0, elevation = 0): THREE.Line {
     const segs = 128;
     const pts: THREE.Vector3[] = [];
     // Build a tilted elliptical orbit in 3D
@@ -1346,7 +1405,9 @@ export class App implements OnDestroy {
       transparent: true,
       opacity: 0.25,
     });
-    this.galaxyInternalGroup.add(new THREE.Line(geo, mat));
+    const line = new THREE.Line(geo, mat);
+    this.galaxyInternalGroup.add(line);
+    return line;
   }
 
   private zoomToGalacticObject(name: string): void {
